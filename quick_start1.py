@@ -15,7 +15,7 @@ bs = 4
 src_img_batch_list = []
 src_lbl_batch_list = []
 src_bbox_batch_list = []  # bounding box for mask-aware similarity matrix computation
-for i in range(3):
+for _ in range(3):
     src_img_batch = torch.rand((bs, 3, 256, 256)).cuda()
     src_lbl_batch = torch.randint(low=0, high=2, size=(bs, label_nc, 256, 256)).cuda().to(torch.float32)
     src_bbox_batch = torch.randint(low=0, high=2, size=(bs, 256, 256)).cuda().to(torch.float32)

@@ -33,10 +33,7 @@ def im2vl(img, t, basic_point_only=True, remove_face_labels=True):
         # check validity
         colors, counts = np.unique(img.reshape(-1, 3), axis=0, return_counts=1)
         # print("num_colors:", colors.shape[0])
-        if basic_point_only and remove_face_labels:
-            num_colors = 19
-        else:
-            num_colors = 25
+        num_colors = 19 if basic_point_only and remove_face_labels else 25
         assert counts.size <= num_colors
         img_tmp = np.zeros(img.shape[:2], dtype=np.uint8)
         for col in colors:
@@ -55,10 +52,7 @@ def vl2ch(img_tensor_batch, t, basic_point_only=False, remove_face_labels=False)
             img_tmp[:, ci, :, :] = (img_tensor_batch.squeeze()==ci).to(dtype=torch.float32)
     elif t == "pose":
         b, h, w = img_tensor_batch.size()
-        if basic_point_only and remove_face_labels:
-            num_colors = 19
-        else:
-            num_colors = 25
+        num_colors = 19 if basic_point_only and remove_face_labels else 25
         img_tmp = torch.zeros(size=(b, num_colors, h, w), dtype=torch.float32)
         for ci in range(num_colors):
             img_tmp[:, ci, :, :] = (img_tensor_batch.squeeze() == ci).to(dtype=torch.float32)
@@ -73,10 +67,7 @@ def vl2im(img, t, basic_point_only=False, remove_face_labels=False):
         img_tmp[img == 1] = 255
     elif t == "pose":
         img_tmp = np.zeros((img.shape[0], img.shape[1], 3), dtype=np.uint8)
-        if basic_point_only and remove_face_labels:
-            num_colors = 19
-        else:
-            num_colors = 25
+        num_colors = 19 if basic_point_only and remove_face_labels else 25
         for i in range(1, num_colors):
             col_msk = img == i
             img_tmp[col_msk] = global_pose_color_dict_reversed[i]
@@ -100,11 +91,10 @@ class Logger(object):
 
 def tensor2im(image_tensor, imtype=np.uint8, normalize=True):
     if isinstance(image_tensor, list):
-        image_numpy = []
-        for i in range(len(image_tensor)):
-            image_numpy.append(tensor2im(image_tensor[i], imtype, normalize))
-        return image_numpy
-
+        return [
+            tensor2im(image_tensor[i], imtype, normalize)
+            for i in range(len(image_tensor))
+        ]
     if isinstance(image_tensor, torch.autograd.Variable):
         image_tensor = image_tensor.data
     if len(image_tensor.size()) == 5:
@@ -200,5 +190,3 @@ def grid2fig(warped_grid, grid_size=32):
     return out
 
 
-if __name__ == "__main__":
-    pass

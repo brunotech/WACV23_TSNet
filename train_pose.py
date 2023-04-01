@@ -46,8 +46,8 @@ LAMBDA_CON = 10.0
 LAMBDA_GRAD = 10.0
 RANDOM_SEED = 1234
 RESTORE_FROM = ""
-SNAPSHOT_DIR = os.path.join(root_dir, 'snapshots' + postfix)
-IMGSHOT_DIR = os.path.join(root_dir, 'imgshots' + postfix)
+SNAPSHOT_DIR = os.path.join(root_dir, f'snapshots{postfix}')
+IMGSHOT_DIR = os.path.join(root_dir, f'imgshots{postfix}')
 NUM_EXAMPLES_PER_EPOCH = 100 * (N_FRAME_TOTAL-N_SOURCE)
 NUM_STEPS_PER_EPOCH = math.ceil(NUM_EXAMPLES_PER_EPOCH / float(BATCH_SIZE))
 MAX_ITER = max(NUM_EXAMPLES_PER_EPOCH * MAX_EPOCH + 1,
@@ -61,7 +61,13 @@ if not os.path.exists(SNAPSHOT_DIR):
 if not os.path.exists(IMGSHOT_DIR):
     os.makedirs(IMGSHOT_DIR)
 
-LOG_PATH = SNAPSHOT_DIR + "/B" + format(BATCH_SIZE, "04d") + "E" + format(MAX_EPOCH, "04d") + ".log"
+LOG_PATH = (
+    f"{SNAPSHOT_DIR}/B"
+    + format(BATCH_SIZE, "04d")
+    + "E"
+    + format(MAX_EPOCH, "04d")
+    + ".log"
+)
 sys.stdout = Logger(LOG_PATH, sys.stdout)
 print(postfix)
 print(json_pth)

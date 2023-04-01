@@ -103,7 +103,7 @@ def connect_keypoints(opt, pts, edge_lists, size, basic_point_only, remove_face_
         bw = random.randrange(1, 3) if opt.isTrain else max(1, h // 450)
         for hand_pts in [hand_pts_l, hand_pts_r]:  # for left and right hand
             for i, edge in enumerate(hand_edge_list):  # for each finger
-                for j in range(0, len(edge) - 1):  # for each part of the finger
+                for j in range(len(edge) - 1):  # for each part of the finger
                     sub_edge = edge[j:j + 2]
                     x, y = hand_pts[sub_edge, 0], hand_pts[sub_edge, 1]
                     if 0 not in x:
@@ -111,10 +111,10 @@ def connect_keypoints(opt, pts, edge_lists, size, basic_point_only, remove_face_
                         draw_edge(body_edges, line_x, line_y, bw=bw,
                                   color=hand_color_list[i], draw_end_points=False)
 
-        ### face
-        edge_len = 2
         bw = random.randrange(1, 3) if opt.isTrain else max(1, h // 450)
         if not remove_face_labels:
+            ### face
+            edge_len = 2
             for edge_list in face_list:
                 for edge in edge_list:
                     for i in range(0, max(1, len(edge) - 1), edge_len - 1):
@@ -143,7 +143,7 @@ def normalize_faces(all_keypoints, keypoints_ref, face_ratio):
     all_keypoints = [keypoints for keypoints, face_center in
                      zip(all_keypoints, face_centers) if face_center[0] != 0]
     face_centers = [face_center for face_center in face_centers if face_center[0] != 0]
-    if len(all_keypoints) == 0: return
+    if not all_keypoints: return
 
     part_list = [[0, 16], [1, 15], [2, 14], [3, 13], [4, 12], [5, 11], [6, 10], [7, 9, 8],  # face (17)
                  [17, 26], [18, 25], [19, 24], [20, 23], [21, 22],  # eyebrows (10)
@@ -173,7 +173,7 @@ def normalize_faces(all_keypoints, keypoints_ref, face_ratio):
             pts = keypoints_ref[pts_idx]
             pts_cen = np.mean(pts, axis=0)
             face_cen = np.mean(keypoints_ref[central_keypoints, :], axis=0)
-            for p, pt in enumerate(pts):
+            for pt in pts:
                 mean_dists_x.append(np.linalg.norm(pt - pts_cen))
                 mean_dists_y.append(np.linalg.norm(pts_cen - face_cen))
             ref_dist_x[i] = sum(mean_dists_x) / len(mean_dists_x) + 1e-3
@@ -185,7 +185,7 @@ def normalize_faces(all_keypoints, keypoints_ref, face_ratio):
                 pts = keypoints[pts_idx]
                 pts_cen = np.mean(pts, axis=0)
                 face_cen = face_centers[k]
-                for p, pt in enumerate(pts):
+                for pt in pts:
                     mean_dists_x.append(np.linalg.norm(pt - pts_cen))
                     mean_dists_y.append(np.linalg.norm(pts_cen - face_cen))
             mean_dist_x = sum(mean_dists_x) / len(mean_dists_x) + 1e-3
@@ -258,15 +258,15 @@ def define_edge_lists(basic_point_only):
         [204, 0, 0], [163, 204, 0], [0, 204, 82], [0, 82, 204], [163, 0, 204]
     ]
 
-    ### face        
+    ### face
     face_list = [
-        [range(0, 17)],
-        [range(17, 22)],  # left eyebrow
-        [range(22, 27)],  # right eyebrow
-        [[28, 31], range(31, 36), [35, 28]],  # nose
-        [[36, 37, 38, 39], [39, 40, 41, 36]],  # left eye
-        [[42, 43, 44, 45], [45, 46, 47, 42]],  # right eye
-        [range(48, 55), [54, 55, 56, 57, 58, 59, 48]],  # mouth
+        [range(17)],
+        [range(17, 22)],
+        [range(22, 27)],
+        [[28, 31], range(31, 36), [35, 28]],
+        [[36, 37, 38, 39], [39, 40, 41, 36]],
+        [[42, 43, 44, 45], [45, 46, 47, 42]],
+        [range(48, 55), [54, 55, 56, 57, 58, 59, 48]],
     ]
 
     return pose_edge_list, pose_color_list, hand_edge_list, hand_color_list, face_list
@@ -296,23 +296,24 @@ def set_color(im, yy, xx, color):
 
 # Set colors given a list of x and y coordinates for the edge.
 def draw_edge(im, x, y, bw=1, color=(255, 255, 255), draw_end_points=False):
-    if x is not None and x.size:
-        h, w = im.shape[0], im.shape[1]
-        # edge
-        for i in range(-bw, bw):
-            for j in range(-bw, bw):
-                yy = np.maximum(0, np.minimum(h - 1, y + i))
-                xx = np.maximum(0, np.minimum(w - 1, x + j))
-                set_color(im, yy, xx, color)
+    if x is None or not x.size:
+        return
+    h, w = im.shape[0], im.shape[1]
+    # edge
+    for i in range(-bw, bw):
+        for j in range(-bw, bw):
+            yy = np.maximum(0, np.minimum(h - 1, y + i))
+            xx = np.maximum(0, np.minimum(w - 1, x + j))
+            set_color(im, yy, xx, color)
 
-        # edge endpoints
-        if draw_end_points:
-            for i in range(-bw * 2, bw * 2):
-                for j in range(-bw * 2, bw * 2):
-                    if (i ** 2) + (j ** 2) < (4 * bw ** 2):
-                        yy = np.maximum(0, np.minimum(h - 1, np.array([y[0], y[-1]]) + i))
-                        xx = np.maximum(0, np.minimum(w - 1, np.array([x[0], x[-1]]) + j))
-                        set_color(im, yy, xx, color)
+    # edge endpoints
+    if draw_end_points:
+        for i in range(-bw * 2, bw * 2):
+            for j in range(-bw * 2, bw * 2):
+                if (i ** 2) + (j ** 2) < (4 * bw ** 2):
+                    yy = np.maximum(0, np.minimum(h - 1, np.array([y[0], y[-1]]) + i))
+                    xx = np.maximum(0, np.minimum(w - 1, np.array([x[0], x[-1]]) + j))
+                    set_color(im, yy, xx, color)
 
 
 # Given the start and end points, interpolate to get a line.
@@ -334,10 +335,7 @@ def interp_points(x, y):
             x = list(reversed(x))
             y = list(reversed(y))
         curve_x = np.linspace(x[0], x[-1], math.ceil(x[-1] - x[0]))
-        if len(x) < 3:
-            curve_y = linear(curve_x, *popt)
-        else:
-            curve_y = func(curve_x, *popt)
+        curve_y = linear(curve_x, *popt) if len(x) < 3 else func(curve_x, *popt)
     # # make sure the start and end point of curve_y is the same as y
     # start_point = np.array([x[0], y[0]])
     # fit_start_point = np.array([curve_x[0], curve_y[0]])

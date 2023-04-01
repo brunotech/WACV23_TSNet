@@ -25,7 +25,7 @@ class ResnetBlock(nn.Module):
         elif padding_type == 'zero':
             p = 1
         else:
-            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+            raise NotImplementedError(f'padding [{padding_type}] is not implemented')
 
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
                        norm_layer(dim),
@@ -41,15 +41,14 @@ class ResnetBlock(nn.Module):
         elif padding_type == 'zero':
             p = 1
         else:
-            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+            raise NotImplementedError(f'padding [{padding_type}] is not implemented')
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
                        norm_layer(dim)]
 
         return nn.Sequential(*conv_block)
 
     def forward(self, x):
-        out = x + self.conv_block(x)
-        return out
+        return x + self.conv_block(x)
 
 
 class Encoder(nn.Module):
@@ -75,13 +74,13 @@ class Encoder(nn.Module):
 
         ### resnet blocks
         mult = 2 ** n_downsampling
-        for i in range(n_blocks):
+        for _ in range(n_blocks):
             model += [
                 [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]]
 
         if debug:
             for n in range(len(model)):
-                setattr(self, 'model' + str(n), nn.Sequential(*model[n]))
+                setattr(self, f'model{str(n)}', nn.Sequential(*model[n]))
         else:
             model_stream = []
             for n in range(len(model)):
@@ -95,7 +94,7 @@ class Encoder(nn.Module):
             res = input
             print(res.size())
             for n in range(self.n_layers):
-                model = getattr(self, 'model' + str(n))
+                model = getattr(self, f'model{str(n)}')
                 res = model(res)
                 print(res.size())
             if self.normalization:
@@ -124,8 +123,7 @@ class Encoder(nn.Module):
 
         rr_channel = torch.sqrt(torch.pow(xx_channel, 2) + torch.pow(yy_channel, 2))
 
-        concat = torch.cat((x, xx_channel, yy_channel, rr_channel), dim=1)
-        return concat
+        return torch.cat((x, xx_channel, yy_channel, rr_channel), dim=1)
 
 
 class Decoder(nn.Module):
@@ -136,12 +134,20 @@ class Decoder(nn.Module):
         self.return_fea = return_fea
         self.n_layers = 1 + n_downsampling + n_blocks
         activation = nn.ReLU(True)
-        model = []
         ### resnet blocks
         mult = 2 ** n_downsampling
         self.map_conv = nn.Conv2d(ngf * mult * 2, ngf * mult, kernel_size=(1, 1))
-        for i in range(n_blocks):
-            model += [[ResnetBlock(ngf * mult, padding_type='reflect', activation=activation, norm_layer=norm_layer)]]
+        model = [
+            [
+                ResnetBlock(
+                    ngf * mult,
+                    padding_type='reflect',
+                    activation=activation,
+                    norm_layer=norm_layer,
+                )
+            ]
+            for _ in range(n_blocks)
+        ]
         ### upsample
         for i in range(n_downsampling):
             mult = 2 ** (n_downsampling - i)
@@ -155,26 +161,24 @@ class Decoder(nn.Module):
                    nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()]]
         if self.return_fea:
             for n in range(len(model)):
-                setattr(self, 'model' + str(n), nn.Sequential(*model[n]))
+                setattr(self, f'model{str(n)}', nn.Sequential(*model[n]))
         else:
             model_stream = []
-            for n in range(len(model)):
-                model_stream += model[n]
+            for item in model:
+                model_stream += item
             self.model = nn.Sequential(*model_stream)
 
     def forward(self, prop_fea, syn_fea):
         input = self.map_conv(torch.cat([prop_fea, syn_fea], dim=1))
-        if self.return_fea:
-            res = input
-            for n in range(self.n_layers - 1):
-                model = getattr(self, 'model' + str(n))
-                res = model(res)  # return feature
-            model = getattr(self, 'model' + str(self.n_layers - 1))
-            final = model(res)
-            return final, res
-        else:
-            output = self.model(input)
-            return output
+        if not self.return_fea:
+            return self.model(input)
+        res = input
+        for n in range(self.n_layers - 1):
+            model = getattr(self, f'model{str(n)}')
+            res = model(res)  # return feature
+        model = getattr(self, f'model{str(self.n_layers - 1)}')
+        final = model(res)
+        return final, res
 
 
 class FuseNet(nn.Module):
@@ -182,16 +186,23 @@ class FuseNet(nn.Module):
                  padding_type='reflect',
                  norm_layer=nn.InstanceNorm2d):
         super(FuseNet, self).__init__()
-        model = []
         self.n_layers = n_blocks
         activation = nn.ReLU(True)
 
-        for i in range(n_blocks):
-            model += [[ResnetBlock(ngf, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]]
-
+        model = [
+            [
+                ResnetBlock(
+                    ngf,
+                    padding_type=padding_type,
+                    activation=activation,
+                    norm_layer=norm_layer,
+                )
+            ]
+            for _ in range(n_blocks)
+        ]
         model_stream = []
-        for n in range(len(model)):
-            model_stream += model[n]
+        for item in model:
+            model_stream += item
         self.model = nn.Sequential(*model_stream)
         self.conv = nn.Conv2d(ngf, ngf // 2, kernel_size=1)
 
@@ -244,15 +255,14 @@ class TSNet(nn.Module):
             self.optimizer_fuse_net = torch.optim.Adam(self.fuse_net.parameters(), lr=lr, betas=(beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(self.netD.parameters(), lr=0.5 * lr, betas=(beta1, 0.999))
             self.optimizer_DF = torch.optim.Adam(self.netDF.parameters(), lr=0.5 * lr, betas=(beta1, 0.999))
-            self.optimizers = []
-            # note the order of optimizer is related to the setting of learning rate
-            self.optimizers.append(self.optimizer_img_enc)
-            self.optimizers.append(self.optimizer_lbl_enc)
-            self.optimizers.append(self.optimizer_dec)
-            self.optimizers.append(self.optimizer_fuse_net)
-            # the final one is D
-            self.optimizers.append(self.optimizer_D)
-            self.optimizers.append(self.optimizer_DF)
+            self.optimizers = [
+                self.optimizer_img_enc,
+                self.optimizer_lbl_enc,
+                self.optimizer_dec,
+                self.optimizer_fuse_net,
+                self.optimizer_D,
+                self.optimizer_DF,
+            ]
             self.lambda_FML = lambda_FML
             self.lambda_VGG = lambda_VGG
             self.lambda_CON = lambda_CON
@@ -263,7 +273,7 @@ class TSNet(nn.Module):
                                'DF', 'DF_real', 'DF_fake',
                                'grad_G', "warp"]
             for loss_name in self.loss_names:
-                setattr(self, "loss_" + loss_name, 0.0)
+                setattr(self, f"loss_{loss_name}", 0.0)
         self.src_img_list = None
         self.src_lbl_list = None
         self.warp_src_img_list = None
@@ -319,8 +329,12 @@ class TSNet(nn.Module):
         else:
             h_range = torch.arange(0, H)
             w_range = torch.arange(0, W)
-        grid = torch.stack(torch.meshgrid([h_range, w_range]), -1).repeat(b, 1, 1, 1).flip(3).float()  # flip h,w to x,y
-        return grid
+        return (
+            torch.stack(torch.meshgrid([h_range, w_range]), -1)
+            .repeat(b, 1, 1, 1)
+            .flip(3)
+            .float()
+        )
 
     def forward(self):
         src_img_fea_list = []
@@ -566,12 +580,11 @@ class TSNet(nn.Module):
         errors_ret = OrderedDict()
         for name in self.loss_names:
             if isinstance(name, str):
-                errors_ret[name] = float(
-                    getattr(self, 'loss_' + name))  # float(...) works for both scalar tensor and float number
+                errors_ret[name] = float(getattr(self, f'loss_{name}'))
         return errors_ret
 
     def get_current_rec_tar_imgs(self, name):
-        return getattr(self, name + "_rec_tar_img")
+        return getattr(self, f"{name}_rec_tar_img")
 
     def print_learning_rate(self):
         lr = self.optimizers[0].param_groups[0]['lr']
@@ -613,10 +626,10 @@ class VGGLoss(nn.Module):
 
     def forward(self, x, y):
         x_vgg, y_vgg = self.vgg(x), self.vgg(y)
-        loss = 0
-        for i in range(len(x_vgg)):
-            loss += self.weights[i] * self.criterion(x_vgg[i], y_vgg[i])
-        return loss
+        return sum(
+            self.weights[i] * self.criterion(x_vgg[i], y_vgg[i])
+            for i in range(len(x_vgg))
+        )
 
 
 class Vgg19(torch.nn.Module):
@@ -648,8 +661,7 @@ class Vgg19(torch.nn.Module):
         h_relu3 = self.slice3(h_relu2)
         h_relu4 = self.slice4(h_relu3)
         h_relu5 = self.slice5(h_relu4)
-        out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
-        return out
+        return [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
 
 
 if __name__ == "__main__":
@@ -663,7 +675,7 @@ if __name__ == "__main__":
     src_img_batch_list = []
     src_lbl_batch_list = []
     src_bbox_batch_list = []
-    for i in range(3):
+    for _ in range(3):
         src_img_batch = torch.rand((bs, 3, 256, 256)).cuda()
         src_lbl_batch = torch.randint(low=0, high=2, size=(bs, label_nc, 256, 256)).cuda().to(torch.float32)
         src_bbox_batch = torch.randint(low=0, high=2, size=(bs, 256, 256)).cuda().to(torch.float32)

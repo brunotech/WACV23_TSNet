@@ -29,15 +29,20 @@ class FaceDatasetTrainVideoMask(data.Dataset):
         self.is_mirror = is_mirror
         self.img_size = (256, 256)
         # mapping from keypoints to face part
-        self.part_list = [[list(range(0, 17))],  # face
-                          [range(17, 22)],  # right eyebrow
-                          [range(22, 27)],  # left eyebrow
-                          [[28, 31], range(31, 36), [35, 28]],  # nose
-                          [[36, 37, 38, 39], [39, 40, 41, 36]],  # right eye
-                          [[42, 43, 44, 45], [45, 46, 47, 42]],  # left eye
-                          [range(48, 55), [54, 55, 56, 57, 58, 59, 48], range(60, 65), [64, 65, 66, 67, 60]],
-                          # mouth and tongue
-                          ]
+        self.part_list = [
+            [list(range(17))],
+            [range(17, 22)],
+            [range(22, 27)],
+            [[28, 31], range(31, 36), [35, 28]],
+            [[36, 37, 38, 39], [39, 40, 41, 36]],
+            [[42, 43, 44, 45], [45, 46, 47, 42]],
+            [
+                range(48, 55),
+                [54, 55, 56, 57, 58, 59, 48],
+                range(60, 65),
+                [64, 65, 66, 67, 60],
+            ],
+        ]
         self.lbl_pths = []
         self.img_pths = []
         self.names = []
@@ -69,9 +74,9 @@ class FaceDatasetTrainVideoMask(data.Dataset):
         names = self.names[seq_idx]
         # random choose n_frame_total frames from the video
         if len(L_paths) > self.n_frame_total:
-            start_idx = random.choice(list(range(0, len(L_paths)-self.n_frame_total+1)))
+            start_idx = random.choice(list(range(len(L_paths)-self.n_frame_total+1)))
         else:
-            start_idx = random.choice(list(range(0, self.n_frame_total)))
+            start_idx = random.choice(list(range(self.n_frame_total)))
         # reference frame, i.e. first frame
         anchor_ky = self.read_data(L_paths[start_idx % len(L_paths)], data_type="np")
         anchor_crop_coords, anchor_scale = self.get_crop_coords(keypoints=anchor_ky)
@@ -123,11 +128,10 @@ class FaceDatasetTrainVideoMask(data.Dataset):
             src_img_list = [F.adjust_saturation(src_img, sat_f) for src_img in src_img_list]
             src_img_list = [F.adjust_hue(src_img, hue_f) for src_img in src_img_list]
 
-        if self.is_mirror:
-            if random.random() < 0.5:
-                src_img_list = [F.hflip(src_img) for src_img in src_img_list]
-                src_lbl_list = [F.hflip(src_lbl) for src_lbl in src_lbl_list]
-                src_bbox_list = [F.hflip(src_bbox) for src_bbox in src_bbox_list]
+        if self.is_mirror and random.random() < 0.5:
+            src_img_list = [F.hflip(src_img) for src_img in src_img_list]
+            src_lbl_list = [F.hflip(src_lbl) for src_lbl in src_lbl_list]
+            src_bbox_list = [F.hflip(src_bbox) for src_bbox in src_bbox_list]
 
         src_lbl_arr_list = [np.asarray(src_lbl, dtype=np.uint8) for src_lbl in src_lbl_list]
         src_bbox_arr_list = [np.asarray(src_bbox, dtype=np.uint8) for src_bbox in src_bbox_list]
@@ -135,28 +139,27 @@ class FaceDatasetTrainVideoMask(data.Dataset):
         src_img_arr_list = [cv2.cvtColor(np.asarray(src_img), cv2.COLOR_RGB2BGR) for src_img in src_img_list]
         src_img_arr_list = [np.asarray(src_img_arr, np.float32) for src_img_arr in src_img_arr_list]
 
-        src_img_arr_list = src_img_arr_list - self.mean
+        src_img_arr_list -= self.mean
         src_img_arr_list = [src_img_arr.transpose((2, 0, 1)) for src_img_arr in src_img_arr_list]
 
         src_img_arr_list = [src_img_arr.copy() for src_img_arr in src_img_arr_list]
         src_lbl_arr_list = [src_lbl_arr.copy() for src_lbl_arr in src_lbl_arr_list]
         src_bbox_arr_list = [src_bbox_arr.copy() for src_bbox_arr in src_bbox_arr_list]
 
-        src_name_list = []
-        for i in range(self.n_frame_total):
-            src_name_list.append(names[(start_idx+i) % len(L_paths)])
-
+        src_name_list = [
+            names[(start_idx + i) % len(L_paths)]
+            for i in range(self.n_frame_total)
+        ]
         return src_img_arr_list, src_lbl_arr_list, src_bbox_arr_list, src_name_list
 
     def read_data(self, path, data_type='img'):
         is_img = data_type == 'img'
         if is_img:
-            img = Image.open(path)
+            return Image.open(path)
         elif data_type == 'np':
-            img = np.loadtxt(path, delimiter=',')
+            return np.loadtxt(path, delimiter=',')
         else:
-            img = path
-        return img
+            return path
 
     def get_face_image(self, keypoints, size, bw):
         w, h = size
@@ -210,8 +213,8 @@ class FaceDatasetTrainVideoMask(data.Dataset):
         offset = [random.uniform(-offset_max, offset_max),
                   random.uniform(-offset_max, offset_max)]
 
-        scale_max = 0.2
         if scale is None:
+            scale_max = 0.2
             scale = [random.uniform(1 - scale_max, 1 + scale_max),
                      random.uniform(1 - scale_max, 1 + scale_max)]
         w *= scale[0]
@@ -224,7 +227,7 @@ class FaceDatasetTrainVideoMask(data.Dataset):
         max_x = min_x + w * 2
         max_y = min_y + h * 2
 
-        return [int(min_y), int(max_y), int(min_x), int(max_x)], scale
+        return [min_y, max_y, min_x, max_x], scale
 
     def crop(self, img, coords):
         min_y, max_y, min_x, max_x = coords
@@ -250,5 +253,3 @@ if __name__ == "__main__":
                                         mean=IMG_MEAN)
     trainloadermix = data.DataLoader(dataset, batch_size=2,
                                      shuffle=True, num_workers=1)
-    for i, data in enumerate(trainloadermix):
-        pass

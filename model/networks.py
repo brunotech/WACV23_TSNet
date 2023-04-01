@@ -31,7 +31,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'none':
         def norm_layer(x): return Identity()
     else:
-        raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
+        raise NotImplementedError(f'normalization layer [{norm_type}] is not found')
     return norm_layer
 
 
@@ -87,7 +87,9 @@ def init_weights(net, init_type='normal', init_gain=0.02):
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
             else:
-                raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
+                raise NotImplementedError(
+                    f'initialization method [{init_type}] is not implemented'
+                )
             if hasattr(m, 'bias') and m.bias is not None:
                 init.constant_(m.bias.data, 0.0)
         elif classname.find('BatchNorm2d') != -1:  # BatchNorm Layer's weight is not a matrix; only normal distribution applies.
@@ -99,7 +101,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
             init.constant_(m.style.bias.data[:m.style.out_features//2], 1.0)
             init.constant_(m.style.bias.data[m.style.out_features//2:], 0.0)
 
-    print('initialize network with %s' % init_type)
+    print(f'initialize network with {init_type}')
     net.apply(init_func)  # apply the initialization function <init_func>
 
 
@@ -156,7 +158,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     else:
-        raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
+        raise NotImplementedError(f'Generator model name [{netG}] is not recognized')
     return init_net(net, init_type, init_gain)
 
 
@@ -203,7 +205,9 @@ def define_D(input_nc, ndf, netD, n_layers_D=3,
     elif netD == 'pixel':     # classify if each pixel is real or fake
         net = PixelDiscriminator(input_nc, ndf, norm_layer=norm_layer)
     else:
-        raise NotImplementedError('Discriminator model name [%s] is not recognized' % netD)
+        raise NotImplementedError(
+            f'Discriminator model name [{netD}] is not recognized'
+        )
     return init_net(net, init_type, init_gain)
 
 
@@ -239,7 +243,7 @@ class GANLoss(nn.Module):
         elif gan_mode in ['wgangp']:
             self.loss = None
         else:
-            raise NotImplementedError('gan mode %s not implemented' % gan_mode)
+            raise NotImplementedError(f'gan mode {gan_mode} not implemented')
 
     def get_target_tensor(self, prediction, target_is_real):
         """Create label tensors with the same size as the input.
@@ -252,10 +256,7 @@ class GANLoss(nn.Module):
             A label tensor filled with ground truth label, and with the size of the input
         """
 
-        if target_is_real:
-            target_tensor = self.real_label
-        else:
-            target_tensor = self.fake_label
+        target_tensor = self.real_label if target_is_real else self.fake_label
         return target_tensor.expand_as(prediction)
 
     def __call__(self, prediction, target_is_real):
@@ -272,10 +273,7 @@ class GANLoss(nn.Module):
             target_tensor = self.get_target_tensor(prediction, target_is_real)
             loss = self.loss(prediction, target_tensor)
         elif self.gan_mode == 'wgangp':
-            if target_is_real:
-                loss = -prediction.mean()
-            else:
-                loss = prediction.mean()
+            loss = -prediction.mean() if target_is_real else prediction.mean()
         return loss
 
 
@@ -303,7 +301,7 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
             alpha = alpha.expand(real_data.shape[0], real_data.nelement() // real_data.shape[0]).contiguous().view(*real_data.shape)
             interpolatesv = alpha * real_data + ((1 - alpha) * fake_data)
         else:
-            raise NotImplementedError('{} not implemented'.format(type))
+            raise NotImplementedError(f'{type} not implemented')
         interpolatesv.requires_grad_(True)
         disc_interpolates = netD(interpolatesv)
         gradients = torch.autograd.grad(outputs=disc_interpolates, inputs=interpolatesv,
@@ -412,7 +410,7 @@ class ResnetBlock(nn.Module):
         elif padding_type == 'zero':
             p = 1
         else:
-            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+            raise NotImplementedError(f'padding [{padding_type}] is not implemented')
 
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias), norm_layer(dim), nn.ReLU(True)]
         if use_dropout:
@@ -426,15 +424,14 @@ class ResnetBlock(nn.Module):
         elif padding_type == 'zero':
             p = 1
         else:
-            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+            raise NotImplementedError(f'padding [{padding_type}] is not implemented')
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p, bias=use_bias), norm_layer(dim)]
 
         return nn.Sequential(*conv_block)
 
     def forward(self, x):
         """Forward function (with skip connections)"""
-        out = x + self.conv_block(x)  # add skip connections
-        return out
+        return x + self.conv_block(x)
 
 
 class UnetGenerator(nn.Module):
@@ -456,7 +453,7 @@ class UnetGenerator(nn.Module):
         super(UnetGenerator, self).__init__()
         # construct unet structure
         unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=None, norm_layer=norm_layer, innermost=True)  # add the innermost layer
-        for i in range(num_downs - 5):          # add intermediate layers with ngf * 8 filters
+        for _ in range(num_downs - 5):
             unet_block = UnetSkipConnectionBlock(ngf * 8, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer, use_dropout=use_dropout)
         # gradually reduce the number of filters from ngf * 8 to ngf
         unet_block = UnetSkipConnectionBlock(ngf * 4, ngf * 8, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
@@ -533,10 +530,7 @@ class UnetSkipConnectionBlock(nn.Module):
         self.model = nn.Sequential(*model)
 
     def forward(self, x):
-        if self.outermost:
-            return self.model(x)
-        else:   # add skip connections
-            return torch.cat([x, self.model(x)], 1)
+        return self.model(x) if self.outermost else torch.cat([x, self.model(x)], 1)
 
 
 class NLayerDiscriminator(nn.Module):
@@ -587,7 +581,7 @@ class NLayerDiscriminator(nn.Module):
 
         if getIntermFeat:
             for n in range(len(sequence)):
-                setattr(self, 'model' + str(n), nn.Sequential(*sequence[n]))
+                setattr(self, f'model{str(n)}', nn.Sequential(*sequence[n]))
         else:
             sequence_stream = []
             for n in range(len(sequence)):
@@ -596,14 +590,13 @@ class NLayerDiscriminator(nn.Module):
 
     def forward(self, input):
         """Standard forward."""
-        if self.getIntermFeat:
-            res = [input]
-            for n in range(self.n_layers + 2):
-                model = getattr(self, 'model' + str(n))
-                res.append(model(res[-1]))
-            return res[1:]
-        else:
+        if not self.getIntermFeat:
             return self.model(input)
+        res = [input]
+        for n in range(self.n_layers + 2):
+            model = getattr(self, f'model{str(n)}')
+            res.append(model(res[-1]))
+        return res[1:]
 
 
 class PixelDiscriminator(nn.Module):

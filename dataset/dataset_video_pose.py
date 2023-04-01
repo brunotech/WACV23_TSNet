@@ -47,7 +47,12 @@ class PoseDatasetTrainVideoMask(data.Dataset):
             frame_name_list.sort()
             frame_list = [os.path.join(image_path, vid_name_list[idx], frame) for frame in frame_name_list]
             self.img_pths.append(frame_list)
-            label_list = [os.path.join(label_path, vid_name_list[idx], frame[:-4]+"_keypoints.json") for frame in frame_name_list]
+            label_list = [
+                os.path.join(
+                    label_path, vid_name_list[idx], f"{frame[:-4]}_keypoints.json"
+                )
+                for frame in frame_name_list
+            ]
             self.lbl_pths.append(label_list)
             rename_list = [self.rename(frame, vid_name_list[idx]) for frame in frame_name_list]
             self.names.append(rename_list)
@@ -62,10 +67,14 @@ class PoseDatasetTrainVideoMask(data.Dataset):
         names = self.names[seq_idx]
         # random choose n_frame_total frames from the video
         if len(L_paths) > (self.n_frame_total - 1) * self.interval:
-            start_idx = random.choice(list(range(0, len(L_paths) - (self.n_frame_total - 1) * self.interval)))
+            start_idx = random.choice(
+                list(
+                    range(len(L_paths) - (self.n_frame_total - 1) * self.interval)
+                )
+            )
             interval = self.interval
         else:
-            start_idx = random.choice(list(range(0, self.n_frame_total)))
+            start_idx = random.choice(list(range(self.n_frame_total)))
             interval = 1
         # reference frame, i.e. first frame
         anchor_size = self.read_data(I_paths[start_idx % len(I_paths)]).size
@@ -123,11 +132,10 @@ class PoseDatasetTrainVideoMask(data.Dataset):
             src_img_list = [F.adjust_saturation(src_img, sat_f) for src_img in src_img_list]
             src_img_list = [F.adjust_hue(src_img, hue_f) for src_img in src_img_list]
 
-        if self.is_mirror:
-            if random.random() < 0.5:
-                src_img_list = [F.hflip(src_img) for src_img in src_img_list]
-                src_lbl_list = [F.hflip(src_lbl) for src_lbl in src_lbl_list]
-                src_bbox_list = [F.hflip(src_bbox) for src_bbox in src_bbox_list]
+        if self.is_mirror and random.random() < 0.5:
+            src_img_list = [F.hflip(src_img) for src_img in src_img_list]
+            src_lbl_list = [F.hflip(src_lbl) for src_lbl in src_lbl_list]
+            src_bbox_list = [F.hflip(src_bbox) for src_bbox in src_bbox_list]
 
         src_lbl_arr_list = [np.asarray(src_lbl, dtype=np.uint8) for src_lbl in src_lbl_list]
         src_lbl_arr_list = [im2vl(src_lbl_arr, self.t,
@@ -136,17 +144,17 @@ class PoseDatasetTrainVideoMask(data.Dataset):
         src_img_arr_list = [cv2.cvtColor(np.asarray(src_img), cv2.COLOR_RGB2BGR) for src_img in src_img_list]
         src_img_arr_list = [np.asarray(src_img_arr, np.float32) for src_img_arr in src_img_arr_list]
 
-        src_img_arr_list = src_img_arr_list - self.mean
+        src_img_arr_list -= self.mean
         src_img_arr_list = [src_img_arr.transpose((2, 0, 1)) for src_img_arr in src_img_arr_list]
 
         src_bbox_arr_list = [np.asarray(src_bbox, dtype=np.uint8) for src_bbox in src_bbox_list]
         src_bbox_arr_list = [np.array(src_bbox != 0, dtype=np.uint8) for src_bbox in src_bbox_arr_list]
         src_bbox_arr_list = [src_bbox_arr.copy() for src_bbox_arr in src_bbox_arr_list]
 
-        src_name_list = []
-        for i in range(self.n_frame_total):
-            src_name_list.append(names[(start_idx+i*interval) % len(L_paths)])
-
+        src_name_list = [
+            names[(start_idx + i * interval) % len(L_paths)]
+            for i in range(self.n_frame_total)
+        ]
         return src_img_arr_list, src_lbl_arr_list, src_bbox_arr_list, src_name_list
 
     def __len__(self):
@@ -168,12 +176,11 @@ class PoseDatasetTrainVideoMask(data.Dataset):
     def read_data(self, path, data_type='img'):
         is_img = data_type == 'img'
         if is_img:
-            img = Image.open(path)
+            return Image.open(path)
         elif data_type == 'np':
-            img = np.loadtxt(path, delimiter=',')
+            return np.loadtxt(path, delimiter=',')
         else:
-            img = path
-        return img
+            return path
 
     def get_image(self, A_path, size, crop_coords, input_type,
                   ppl_idx=None, ref_face_pts=None, scale=None):
